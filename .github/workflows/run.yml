@@ -1,0 +1,32 @@
+name: run
+on:
+  workflow_dispatch:
+    inputs:
+      url1:
+        description: 'URL to a file to verify'
+        required: false
+      url2:
+        description: 'URL to a file to verify'
+        required: false
+      url3:
+        description: 'URL to a file to verify'
+        required: false
+
+jobs:
+  run:
+    name: run
+    runs-on: ubuntu-latest
+    steps:
+      - name: pull
+        run: docker pull morganamilo/parity-gpg-assignment
+      - name: run
+        run: >
+          docker run -i --rm -v $(pwd)/out:/out morganamilo/parity-gpg-assignment
+          ${{ inputs.url1 }} ${{ inputs.url2 }} ${{ inputs.url3 }} <<< "${{ secrets.SECRET_KEY }}"
+      - name: upload
+        uses: actions/upload-artifact@v3
+        with:
+          name: out
+          path: out/*
+
+
