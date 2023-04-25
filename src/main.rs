@@ -64,7 +64,7 @@ fn main() -> anyhow::Result<()> {
         let url = url::Url::parse(url)?;
         let name = url.path().split('/').last().context("no filename")?;
 
-        let (ok, output) = verify(name)?;
+        let (ok, output) = verify(&format!("/out/{}", name))?;
 
         summary.push(Summary {
             url: url.to_string(),
@@ -95,7 +95,7 @@ fn main() -> anyhow::Result<()> {
         let url = url::Url::parse(url)?;
         let name = url.path().split('/').last().context("no filename")?;
 
-        sign(name, &fingerprint)?;
+        sign(&format!("/out/{}", name), &fingerprint)?;
     }
 
     Ok(())
@@ -119,8 +119,8 @@ fn verify(name: &str) -> anyhow::Result<(bool, String)> {
     // container
     let res = Command::new("gpg")
         .arg("--verify")
-        .arg(format!("/out/{}.asc", name))
-        .arg(format!("/out/{}", name))
+        .arg(format!("{}.asc", name))
+        .arg(name)
         .output()?;
 
     let output = String::from_utf8_lossy(&res.stderr).to_string();
@@ -129,12 +129,13 @@ fn verify(name: &str) -> anyhow::Result<(bool, String)> {
 
 fn sign(name: &str, fingerprint: &str) -> anyhow::Result<()> {
     let res = Command::new("gpg")
+        .arg("--yes")
         .arg("-u")
         .arg(fingerprint)
         .arg("--output")
-        .arg(format!("/out/{}.notary.asc", name))
+        .arg(format!("{}.notary.asc", name))
         .arg("--detach-sign")
-        .arg(format!("/out/{}", name))
+        .arg(name)
         .output()?;
 
     let output = String::from_utf8_lossy(&res.stderr).to_string();
@@ -187,4 +188,32 @@ fn import(key: &[u8]) -> anyhow::Result<()> {
     let output = String::from_utf8_lossy(&res.stderr).to_string();
     ensure!(res.status.success(), output);
     Ok(())
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use std::fs::remove_file;
+
+    #[test]
+    fn test_verify() {
+        assert_eq!(verify("testdata/1").unwrap().0, true);
+        assert_eq!(verify("testdata/2").unwrap().0, true);
+        assert_eq!(verify("testdata/3").unwrap().0, true);
+        assert_eq!(verify("testdata/invalid-1").unwrap().0, false);
+        assert_eq!(verify("testdata/invalid-2").unwrap().0, false);
+    }
+
+    #[test]
+    fn test_get_fingerprint() {
+        let fingerprint = get_fingerprint(include_bytes!("../testdata/parity-public-key")).unwrap();
+        assert_eq!(fingerprint, "97963670F349E5FEAF447C3B0DA93BB59EB71B89");
+    }
+
+    #[test]
+    fn test_sign() {
+        let _ = remove_file("testdata/sign.notary.asc");
+        sign("testdata/sign", "97963670F349E5FEAF447C3B0DA93BB59EB71B89").unwrap();
+        remove_file("testdata/sign.notary.asc").unwrap();
+    }
 }
